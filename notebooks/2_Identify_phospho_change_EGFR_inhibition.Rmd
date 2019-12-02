@@ -1,0 +1,62 @@
+---
+title: "R Notebook"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+Here, we want to identify the potential changes in phosphorylation which may occur following inhibition of EGFR as per the Orre et al (2018) 'SubCellBarCode' paper (https://www.cell.com/molecular-cell/pdfExtended/S1097-2765(18)31005-0), in which they used gefitinib to inhibit EGFR in a 746-750 del EGFR mutant cell line (HCC827).
+
+In Zhang et al (2017; https://www.mcponline.org/content/16/5/891/tab-figures-data), they used EGFR inhibitors on a variety of backgrounds, including PC9 which is also 746-750 del. Unfotunately, they didn't use Gefitinib but rather erlotinib, which appears to be a similar first generation EGFR tyrosine kinase inhibitor (TKI) so this seems close enough.
+```{r}
+library(tidyverse)
+```
+
+```{r}
+.data <- readxl::read_excel('../raw/Zhang_et_al_sup_data_1.xlsx', sheet=6, skip=1)
+```
+For PC9, the SILAC experiment was conducted such that L=Serum Starved, M=EGF, H=EGF+erlotinib. We are interested in the sites which are erlotinib-sensitive, e.g H/M.
+
+In the paper, they state there are 73 erlotinib-sensitive phosohorylation sites. Le'ts inspect the H/M ratios to see if we can find these as a check we understand their data correctly.
+```{r}
+.data %>% ggplot(aes(log2(`Ratio H/M normalized`))) + geom_density() + theme_bw() +
+  geom_vline(xintercept=-1, linetype=2)
+```
+
+```{r}
+erlotinib_sensitive <- .data %>%
+  filter(log2(`Ratio H/M normalized`)<(-1)) %>%
+  arrange(`Ratio H/M normalized`)
+
+print(nrow(erlotinib_sensitive))
+print(head(erlotinib_sensitive))
+```
+OK, we have our 73 sites.
+
+From here we could either take the top most sensitive and compare to the least sensitive, e.g subset like so. Note that it's possible for a protein to have sites which are both highly sensitive and highly insensitive so need to start by grouping sites by proteins and identifying the most sensitive site
+```{r}
+.data_protein <- .data %>%
+  group_by(Protein) %>%
+  summarise(`Ratio H/M normalized`=min(`Ratio H/M normalized`))
+
+most_sensitive <- .data_protein %>% arrange(`Ratio H/M normalized`) %>%
+  pull(Protein) %>% head(50)
+
+least_sensitive <- .data_protein %>% arrange(`Ratio H/M normalized`) %>%
+  pull(Protein) %>% tail(50)
+
+.data_protein %>% mutate(sensitive=Protein %in% most_sensitive,
+                         insensitive=Protein %in% least_sensitive,
+                         label=recode(interaction(sensitive, insensitive),
+                                      'FALSE.FALSE'='Other',
+                                      'TRUE.FALSE'='Sensitive',
+                                      'FALSE.TRUE'='Insensitive')) %>%
+  ggplot(aes(log2(`Ratio H/M normalized`), fill=label)) +
+  geom_histogram() +
+  theme_bw() +
+  scale_fill_discrete(name='') +
+  xlab('EGFR-TKI vs EGF (log2)')
+```
+
+
+
