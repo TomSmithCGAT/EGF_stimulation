@@ -1,6 +1,8 @@
 ---
 title: "R Notebook"
-output: html_notebook
+output:
+  pdf_document: default
+  html_notebook: default
 ---
 
 
@@ -50,6 +52,7 @@ Merge the replicates and obtain the average change in phosphorylation
 combined_replicates <- rep1 %>% merge(rep2, by=c('Motif', 'UniprotAc', 'Protein description')) %>%
   rowwise() %>%
   mutate(ave_max_diff=mean(max_diff.x, max_diff.y)) %>%
+  select(UniprotAc, Motif, `Protein description`, max_diff.x, max_diff.y, ave_max_diff) %>%
   arrange(desc(ave_max_diff))
 
 
