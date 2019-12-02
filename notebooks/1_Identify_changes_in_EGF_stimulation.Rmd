@@ -1,0 +1,60 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+Here, we want to take the sup. tables from Vemulapalli et al (https://www.biorxiv.org/content/10.1101/598664v2.full) and group proteins by their change in phosphorylation
+```{r}
+library(tidyverse)
+```
+
+Read in the data and keep sites quantified in both reps
+```{r}
+
+readRepData <- function(sheet, pid="Protein Id"){
+  x <- readxl::read_excel('../raw/Vemulapalli_sup.xlsx', sheet=sheet)
+  
+  x %>%  separate(!!(pid), into=c('sp', 'UniprotAc', 'name')) %>%
+    select(UniprotAc, `Protein description`, Motif, DMSO_0, DMSO_5, DMSO_10, DMSO_30)
+}
+
+rep1 <- readRepData(1)
+rep2 <- readRepData(2, pid="Protein ID")
+both_reps <- intersect(rep1$Motif, rep2$Motif)
+print(length(both_reps))
+
+rep1 <- rep1 %>% filter(Motif %in% both_reps)
+rep2 <- rep2 %>% filter(Motif %in% both_reps)
+
+```
+
+Identify the maximum changes in phosphorylation for each replicate
+```{r}
+
+getMaxDiff <- function(obj){
+  
+  diffs <- obj %>%
+    mutate(diff5=DMSO_5-DMSO_0, diff10=DMSO_10-DMSO_0, diff30=DMSO_30-DMSO_0) %>%
+    select(diff5, diff10, diff30)
+  
+  return(diffs %>% apply(MARGIN=1, function(x) x[which(abs(x)==max(abs(x)))]))
+}
+
+rep1$max_diff <- getMaxDiff(rep1)
+rep2$max_diff <- getMaxDiff(rep2)
+```
+
+Merge the replicates and obtain the average change in phosphorylation
+```{r}
+combined_replicates <- rep1 %>% merge(rep2, by=c('Motif', 'UniprotAc', 'Protein description')) %>%
+  rowwise() %>%
+  mutate(ave_max_diff=mean(max_diff.x, max_diff.y)) %>%
+  arrange(desc(ave_max_diff))
+
+
+print(head(combined_replicates))
+print(tail(combined_replicates))
+
+```
+
